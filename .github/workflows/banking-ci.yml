@@ -11,6 +11,28 @@ permissions:
 jobs:
   build-app:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_password
+          MYSQL_DATABASE: banking_app
+          MYSQL_USER: banking_ci
+          MYSQL_PASSWORD: ci_password
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      CI_DB_URL: jdbc:mysql://127.0.0.1:3307/banking_app?useSSL=false&allowPublicKeyRetrieval=true
+      CI_DB_USERNAME: banking_ci
+      CI_DB_PASSWORD: ci_password
 
     steps:
       - name: Download repository code
@@ -22,7 +44,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build Spring Boot backend
+      - name: Create database tables
+        env:
+          MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+        run: |
+          docker exec -i \
+            -e MYSQL_PWD=ci_root_password \
+            "$MYSQL_CONTAINER" \
+            mysql --user=root < sql/Banking_Setup.sql
+
+      - name: Test and build Spring Boot backend
         working-directory: backend
         run: mvn --batch-mode clean verify
 
@@ -52,3 +83,11 @@ jobs:
           name: banking-frontend
           path: frontend/dist/
           if-no-files-found: error
+
+      - name: Save test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: banking-test-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: ignore
