@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build-backend:
+  build-app:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,3 +25,30 @@ jobs:
       - name: Build Spring Boot backend
         working-directory: backend
         run: mvn --batch-mode clean verify
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build React frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Save backend JAR
+        uses: actions/upload-artifact@v7
+        with:
+          name: banking-backend
+          path: backend/target/*.jar
+          if-no-files-found: error
+
+      - name: Save frontend files
+        uses: actions/upload-artifact@v7
+        with:
+          name: banking-frontend
+          path: frontend/dist/
+          if-no-files-found: error
